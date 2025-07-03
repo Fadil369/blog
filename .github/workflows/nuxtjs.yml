@@ -1,0 +1,86 @@
+name: Deploy Nuxt.js Blog to Cloudflare Pages
+
+# Trigger the workflow on every push to any branch
+on:
+  push:
+
+# Set permissions for the workflow
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Cloudflare Pages
+    
+    steps:
+      # Step 1: Checkout the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history for proper git operations
+          fetch-depth: 0
+
+      # Step 2: Setup Node.js environment for Nuxt.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Use latest LTS version of Node.js
+          node-version: '20'
+          # Cache npm dependencies for faster builds
+          cache: 'npm'
+          # Specify cache dependency path
+          cache-dependency-path: 'package-lock.json'
+
+      # Step 3: Install project dependencies
+      - name: Install dependencies
+        run: |
+          # Check if package.json exists before installing
+          if [ -f "package.json" ]; then
+            npm ci --prefer-offline --no-audit
+          else
+            echo "Warning: package.json not found. Skipping dependency installation."
+            echo "Please ensure your Nuxt.js project is properly configured."
+          fi
+
+      # Step 4: Build the static site using Nuxt.js
+      - name: Build static site
+        run: |
+          # Check if package.json exists before building
+          if [ -f "package.json" ]; then
+            # Generate static site for deployment
+            npm run generate
+          else
+            echo "Warning: package.json not found. Creating empty dist directory."
+            mkdir -p dist
+            echo "<h1>Blog Coming Soon</h1><p>This blog is being set up.</p>" > dist/index.html
+          fi
+        env:
+          # Set NODE_ENV to production for optimized build
+          NODE_ENV: production
+
+      # Step 5: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          # Use Cloudflare API token from repository secrets
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Use Cloudflare account ID from repository secrets
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Deploy command for Cloudflare Pages
+          command: pages deploy dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME || 'blog' }}
+        env:
+          # Additional environment variables for deployment
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Step 6: Output deployment information
+      - name: Output deployment info
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "🚀 Your blog has been deployed to Cloudflare Pages"
+          echo "📝 Make sure to configure the following repository secrets:"
+          echo "   - CLOUDFLARE_API_TOKEN: Your Cloudflare API token"
+          echo "   - CLOUDFLARE_ACCOUNT_ID: Your Cloudflare account ID"
+          echo "   - CLOUDFLARE_PROJECT_NAME: Your Cloudflare Pages project name (optional, defaults to 'blog')"

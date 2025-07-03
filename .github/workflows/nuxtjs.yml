@@ -23,134 +23,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Fetch full history for proper git operations
           fetch-depth: 0
 
-      # Step 2: Setup Node.js environment for Nuxt.js
+      # Step 2: Setup Node.js environment
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # Use latest LTS version of Node.js
           node-version: '20'
-          # Enable comprehensive caching for better performance
           cache: 'npm'
-          # Specify cache dependency path
           cache-dependency-path: 'package-lock.json'
 
-      # Step 3: Cache node_modules for faster builds
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            node_modules
-            .nuxt
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      # Step 4: Install project dependencies
+      # Step 3: Install dependencies
       - name: Install dependencies
-        run: |
-          # Check if package.json exists before installing
-          if [ -f "package.json" ]; then
-            # Use npm ci for faster, reliable, reproducible builds
-            npm ci --prefer-offline --no-audit --no-fund
-          else
-            echo "❌ Error: package.json not found!"
-            echo "Please ensure your Nuxt.js project is properly configured."
-            exit 1
-          fi
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-      # Step 5: Lint and validate code quality
-      - name: Lint code
-        run: |
-          if [ -f "package.json" ] && npm run lint --if-present; then
-            echo "✅ Code linting passed"
-          else
-            echo "⚠️  No linting configuration found or linting failed"
-          fi
-
-      # Step 6: Run tests if available
-      - name: Run tests
-        run: |
-          if [ -f "package.json" ] && npm run test --if-present; then
-            echo "✅ Tests passed"
-          else
-            echo "⚠️  No tests found or tests failed"
-          fi
-
-      # Step 7: Build the static site using Nuxt.js
+      # Step 4: Build the static site
       - name: Build static site
-        run: |
-          # Check if package.json exists before building
-          if [ -f "package.json" ]; then
-            # Generate static site for deployment
-            npm run generate
-            
-            # Verify build output
-            if [ -d "dist" ] || [ -d ".output/public" ]; then
-              echo "✅ Build completed successfully"
-            else
-              echo "❌ Build failed - no output directory found"
-              exit 1
-            fi
-          else
-            echo "❌ Error: package.json not found!"
-            exit 1
-          fi
+        run: npm run generate
         env:
-          # Set NODE_ENV to production for optimized build
           NODE_ENV: production
-          # Enable build optimizations
-          NITRO_PRESET: cloudflare-pages
 
-      # Step 8: Deploy to Cloudflare Pages
+      # Step 5: Deploy to Cloudflare Pages
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
-          # Use Cloudflare API token from repository secrets
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # Use Cloudflare account ID from repository secrets
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Deploy command for Cloudflare Pages with auto-detection
-          command: pages deploy ${{ steps.build-output.outputs.directory || 'dist' }} --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }} --compatibility-date=2024-07-03
-        env:
-          # Additional environment variables for deployment
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }} --compatibility-date=2025-07-03
 
-      # Step 9: Output deployment information
+      # Step 6: Output deployment info
       - name: Output deployment info
         run: |
-          echo "🎉 Deployment completed successfully!"
-          echo "🚀 Your BrainSAIT blog has been deployed to Cloudflare Pages"
-          echo "📝 Repository secrets configured:"
-          echo "   ✅ CLOUDFLARE_API_TOKEN: Configured"
-          echo "   ✅ CLOUDFLARE_ACCOUNT_ID: Configured"
-          echo "   ✅ CLOUDFLARE_PROJECT_NAME: ${CLOUDFLARE_PROJECT_NAME:-'brainsait-blog (default)'}"
-          echo ""
-          echo "🔗 Access your blog at: https://${CLOUDFLARE_PROJECT_NAME:-brainsait-blog}.pages.dev"
-          echo "📊 Perfect for sharing healthcare data analysis insights!"
-
-      # Step 10: Comment on PR with deployment info (if PR)
-      - name: Comment PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `🚀 **Deployment Preview Ready!**
-              
-              Your Nuxt.js blog has been deployed to Cloudflare Pages.
-              
-              **Preview URL:** https://${process.env.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog'}.pages.dev
-              
-              **Build Status:** ✅ Success
-              **Deployment Time:** ${new Date().toISOString()}
-              
-              Perfect for showcasing BrainSAIT's healthcare data analysis capabilities! 📊`
-            })
+          echo "✅ Deployment completed successfully!"
+          echo "🚀 Your BrainSAIT blog is live at: https://${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }}.pages.dev"

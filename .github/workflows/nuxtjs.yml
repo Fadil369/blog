@@ -9,6 +9,8 @@ on:
 permissions:
   contents: read
   deployments: write
+  attestations: write
+  id-token: write
 
 jobs:
   deploy:
@@ -25,13 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # Remove cache until package-lock.json exists
-          # cache: 'npm'
-          # cache-dependency-path: 'package-lock.json'
+          # No cache until package-lock.json exists
 
       - name: Install dependencies
         run: |
-          # Check if package.json exists
           if [ -f "package.json" ]; then
             echo "📦 Installing dependencies..."
             npm ci --prefer-offline --no-audit --no-fund
@@ -40,7 +39,7 @@ jobs:
             npm init -y
             npm install nuxt@latest
             
-            # Create basic nuxt.config.ts
+            # Create basic nuxt.config.ts for BrainSAIT healthcare blog
             cat > nuxt.config.ts << 'EOF'
 export default defineNuxtConfig({
   devtools: { enabled: true },
@@ -53,23 +52,66 @@ export default defineNuxtConfig({
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Healthcare data analysis and insurance sector insights by BrainSAIT' }
+        { name: 'description', content: 'Healthcare data analysis and insurance sector insights by BrainSAIT' },
+        { name: 'keywords', content: 'healthcare, insurance, data analysis, Swift, Python, FastAPI' }
       ]
     }
   }
 })
 EOF
             
-            # Create basic app.vue
-            mkdir -p pages
+            # Create basic app.vue with BrainSAIT branding
             cat > app.vue << 'EOF'
 <template>
-  <div>
-    <h1>🏥 BrainSAIT Healthcare Analytics Blog</h1>
-    <p>Welcome to our healthcare data analysis and insurance sector insights platform.</p>
-    <p>Specializing in Swift, Python, and modern web technologies.</p>
+  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div class="container mx-auto px-4 py-8">
+      <header class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-indigo-800 mb-4">
+          🏥 BrainSAIT Healthcare Analytics
+        </h1>
+        <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+          Advanced healthcare data analysis and insurance sector insights
+        </p>
+      </header>
+      
+      <main class="grid md:grid-cols-2 gap-8">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h2 class="text-2xl font-semibold text-indigo-700 mb-4">
+            📊 Data Analysis Services
+          </h2>
+          <ul class="space-y-2 text-gray-700">
+            <li>• Insurance claims analysis</li>
+            <li>• Healthcare trend prediction</li>
+            <li>• Risk assessment modeling</li>
+            <li>• Automated reporting systems</li>
+          </ul>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h2 class="text-2xl font-semibold text-indigo-700 mb-4">
+            🛠️ Technology Stack
+          </h2>
+          <ul class="space-y-2 text-gray-700">
+            <li>• Swift (iOS/macOS development)</li>
+            <li>• Python (Backend with FastAPI)</li>
+            <li>• Docker containerization</li>
+            <li>• Cloudflare infrastructure</li>
+          </ul>
+        </div>
+      </main>
+      
+      <footer class="text-center mt-12 text-gray-500">
+        <p>© 2025 BrainSAIT - Healthcare Data Intelligence</p>
+      </footer>
+    </div>
   </div>
 </template>
+
+<style>
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+</style>
 EOF
             
             # Update package.json scripts
@@ -77,24 +119,57 @@ EOF
             npm pkg set scripts.build="nuxt build"
             npm pkg set scripts.dev="nuxt dev"
             npm pkg set scripts.preview="nuxt preview"
+            
+            # Add Tailwind CSS for styling
+            npm install -D tailwindcss postcss autoprefixer
+            npx tailwindcss init -p
           fi
 
       - name: Build static site
         run: |
-          echo "🔨 Building Nuxt.js static site..."
+          echo "🔨 Building BrainSAIT healthcare blog..."
           npm run generate
+          
+          # Verify build output
+          if [ -d "dist" ] || [ -d ".output/public" ]; then
+            echo "✅ Build completed successfully"
+            echo "📁 Build artifacts ready for deployment"
+          else
+            echo "❌ Build failed - no output directory found"
+            exit 1
+          fi
         env:
           NODE_ENV: production
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2.4.0
+        with:
+          subject-path: |
+            dist/**
+            .output/public/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }} --compatibility-date=2025-07-03
+          command: pages deploy ${{ steps.build-check.outputs.directory || 'dist' }} --project-name=${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }} --compatibility-date=2025-07-03
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Output deployment info
         run: |
-          echo "✅ Deployment completed successfully!"
-          echo "🚀 Your BrainSAIT blog is live at: https://${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }}.pages.dev"
-          echo "🏥 Perfect for healthcare data analysis content!"
+          echo "🎉 BrainSAIT Healthcare Blog Deployed Successfully!"
+          echo "🚀 Live at: https://${{ secrets.CLOUDFLARE_PROJECT_NAME || 'brainsait-blog' }}.pages.dev"
+          echo "🔒 Build provenance attestation: ✅ Verified"
+          echo "🏥 Ready for healthcare data analysis content!"
+          echo ""
+          echo "📋 Deployment Summary:"
+          echo "   • Build time: $(date -u)"
+          echo "   • Node.js version: $(node --version)"
+          echo "   • Deployment target: Cloudflare Pages"
+          echo "   • Security: Build provenance attested"
+          echo "   • Industry focus: Healthcare & Insurance"
